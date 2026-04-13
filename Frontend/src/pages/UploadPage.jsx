@@ -21,11 +21,54 @@ export function UploadPage() {
     e.preventDefault();
   };
 
-  const handleSubmit = (e) => {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (file) {
-      // Simulate submission & redirect to result page
-      navigate('/result');
+    if (!file) return;
+
+    setAnalyzing(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch('http://localhost:5000/predict', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze image');
+      }
+
+      // Save this report to the backend database
+      const token = localStorage.getItem('auth_token');
+      await fetch('http://localhost:5005/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          damage_type: data.damage,
+          confidence: data.confidence,
+          severity: data.severity,
+          location: location || 'Unknown Location',
+        })
+      });
+
+      // Navigate to ResultPage with real ML results
+      navigate('/result', { state: { mlResult: data, filePreview: URL.createObjectURL(file) } });
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -93,10 +136,16 @@ export function UploadPage() {
              />
           </div>
 
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4">
+              {error}
+            </div>
+          )}
+
           <div className="pt-4 border-t border-slate-100 flex justify-end gap-4">
             <Button type="button" variant="ghost" onClick={() => setFile(null)}>Cancel</Button>
-            <Button type="submit" disabled={!file} className="min-w-[150px]">
-              Analyze Image
+            <Button type="submit" disabled={!file || analyzing} className="min-w-[150px]">
+              {analyzing ? 'Analyzing...' : 'Analyze Image'}
             </Button>
           </div>
         </form>

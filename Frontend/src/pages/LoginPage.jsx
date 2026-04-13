@@ -11,36 +11,40 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleLogin = (e) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setErrorMsg(''); // clear previous errors
+    if (!email || !password) return;
 
-    if (!email || !password) {
-      setErrorMsg('Please fill in both email and password.');
-      return;
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      const response = await fetch('http://localhost:5005/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      // Login successful, save real API token and User Profile
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user_name', data.user_profile.username);
+      localStorage.setItem('auth_user_email', data.user_profile.email);
+      
+      navigate('/dashboard');
+
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setLoading(false);
     }
-
-    const savedEmail = localStorage.getItem('auth_email');
-    const savedPassword = localStorage.getItem('auth_password');
-
-    if (!savedEmail) {
-      setErrorMsg('Please sign up first.');
-      return;
-    }
-
-    if (email !== savedEmail) {
-      setErrorMsg('User not found. Please sign up first.');
-      return;
-    }
-
-    if (password !== savedPassword) {
-      setErrorMsg('Incorrect password. Please try again.');
-      return;
-    }
-
-    // Login successful
-    localStorage.setItem('auth_token', 'mock_token_12345');
-    navigate('/dashboard');
   };
 
   return (
@@ -90,8 +94,8 @@ export function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-lg">
-              Login In
+            <Button type="submit" className="w-full h-12 text-lg" disabled={loading}>
+              {loading ? 'Logging in...' : 'Log In'}
             </Button>
           </form>
 

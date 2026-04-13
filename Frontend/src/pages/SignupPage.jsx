@@ -11,16 +11,40 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSignup = (e) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSignup = async (e) => {
     e.preventDefault();
     if (!name || !email || !password) return;
     
-    // Store user data in localStorage
-    localStorage.setItem('auth_email', email);
-    localStorage.setItem('auth_password', password);
-    localStorage.setItem('auth_name', name);
+    setLoading(true);
+    setError(null);
     
-    navigate('/profile-setup');
+    try {
+      const response = await fetch('http://localhost:5005/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: name, email, password })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to register');
+      }
+      
+      // Store user data in localStorage globally for the app
+      localStorage.setItem('auth_email', email);
+      
+      // Navigate to VerificationPage instead of ProfileSetup so they can enter OTP
+      navigate('/verify');
+      
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,6 +63,12 @@ export function SignupPage() {
 
         <Card className="p-8 backdrop-blur-xl bg-white/90">
           <form onSubmit={handleSignup} className="space-y-6">
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4">
+                {error}
+              </div>
+            )}
+            
             <Input 
               type="text" 
               placeholder="Full Name" 
@@ -66,8 +96,8 @@ export function SignupPage() {
               required
             />
 
-            <Button type="submit" className="w-full h-12 text-lg mt-2">
-              Next Step
+            <Button type="submit" className="w-full h-12 text-lg mt-2" disabled={loading}>
+              {loading ? 'Sending Verification...' : 'Next Step'}
             </Button>
           </form>
 

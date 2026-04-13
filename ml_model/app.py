@@ -10,6 +10,7 @@ import json
 import time
 
 app = Flask(__name__)
+CORS(app)  # Allow cross-origin requests from the React frontend
 
 import json
 

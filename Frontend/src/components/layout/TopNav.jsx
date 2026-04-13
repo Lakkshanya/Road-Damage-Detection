@@ -58,8 +58,10 @@ export function TopNav({ onMenuToggle }) {
             <User size={16} />
           </div>
           <div className="hidden sm:block text-sm">
-            <p className="font-medium text-slate-700 leading-none mb-1">Admin User</p>
-            <p className="text-slate-400 text-xs leading-none border-t border-transparent pt-[1px]">City Official</p>
+            <p className="font-medium text-slate-700 leading-none mb-1">
+              {localStorage.getItem('auth_user_name') || 'Guest User'}
+            </p>
+            <p className="text-slate-400 text-xs leading-none border-t border-transparent pt-[1px]">Active Session</p>
           </div>
         </div>
       </div>

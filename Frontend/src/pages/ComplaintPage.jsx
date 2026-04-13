@@ -1,25 +1,15 @@
 import { useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { FileText, MoreHorizontal, Loader2 } from 'lucide-react';
+import { FileText, MoreHorizontal } from 'lucide-react';
 
 export function ComplaintPage() {
-  const [isGenerating, setIsGenerating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const complaints = [];
 
   const getVisiblePages = () => {
     if (currentPage === 1) return [1, 2, 3];
     return [currentPage - 1, currentPage, currentPage + 1];
-  };
-
-  const handleGenerateReport = () => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      alert('Report successfully generated and placed in your downloads folder!');
-    }, 2000);
   };
 
   return (
@@ -29,17 +19,6 @@ export function ComplaintPage() {
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Complaints & Reports</h1>
           <p className="text-slate-500 font-medium mt-1">Manage user submitted road issues</p>
         </div>
-        <Button 
-          onClick={handleGenerateReport} 
-          disabled={isGenerating}
-          className="min-w-[160px]"
-        >
-          {isGenerating ? (
-            <span className="flex items-center gap-2"><Loader2 size={18} className="animate-spin" /> Generating...</span>
-          ) : (
-            'Generate Report'
-          )}
-        </Button>
       </div>
 
       <Card className="overflow-hidden">
