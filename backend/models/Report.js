@@ -6,6 +6,8 @@ const ReportSchema = new mongoose.Schema({
     confidence: { type: String, required: true },  // e.g. "94.20%"
     severity: { type: String, required: true },    // "High", "Medium", "Low"
     location: { type: String, default: 'Unknown Location' },
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null },
     status: { type: String, default: 'Pending', enum: ['Pending', 'In Progress', 'Resolved'] },
     image_url: { type: String, default: '' },
 }, { timestamps: true });

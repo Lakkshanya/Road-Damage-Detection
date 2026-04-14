@@ -1,4 +1,5 @@
 const Report = require('../models/Report');
+const Complaint = require('../models/Complaint');
 const jwt = require('jsonwebtoken');
 
 // Middleware-style helper to extract user from JWT
@@ -19,7 +20,7 @@ exports.createReport = async (req, res) => {
         const userId = getUserFromToken(req);
         if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { damage_type, confidence, severity, location } = req.body;
+        const { damage_type, confidence, severity, location, latitude, longitude } = req.body;
 
         const report = new Report({
             user: userId,
@@ -27,6 +28,8 @@ exports.createReport = async (req, res) => {
             confidence,
             severity,
             location: location || 'Unknown Location',
+            latitude: latitude || null,
+            longitude: longitude || null,
         });
 
         await report.save();
@@ -62,7 +65,7 @@ exports.getStats = async (req, res) => {
         const [total, high, resolved] = await Promise.all([
             Report.countDocuments({ user: userId }),
             Report.countDocuments({ user: userId, severity: 'High' }),
-            Report.countDocuments({ user: userId, status: 'Resolved' }),
+            Complaint.countDocuments({ status: 'Closed' }),
         ]);
 
         // Breakdown by damage type for Pie Chart

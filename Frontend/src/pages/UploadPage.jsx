@@ -24,6 +24,13 @@ export function UploadPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState(null);
 
+  const toBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) return;
@@ -46,7 +53,32 @@ export function UploadPage() {
         throw new Error(data.error || 'Failed to analyze image');
       }
 
+      // Convert image to Base64 for persistence and complaint submission
+      const base64Image = await toBase64(file);
+
       // Save this report to the backend database
+      let latitude = null;
+      let longitude = null;
+      if (location) {
+        try {
+          let geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
+          let geoData = await geoRes.json();
+          
+          if (!geoData || geoData.length === 0) {
+            const fallbackLocation = location.includes('Chennai') ? location : `${location}, Chennai`;
+            geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackLocation)}&limit=1`);
+            geoData = await geoRes.json();
+          }
+
+          if (geoData && geoData.length > 0) {
+            latitude = parseFloat(geoData[0].lat);
+            longitude = parseFloat(geoData[0].lon);
+          }
+        } catch (geoErr) {
+          console.warn('Geocoding failed, saving without coordinates:', geoErr);
+        }
+      }
+
       const token = localStorage.getItem('auth_token');
       await fetch('http://localhost:5005/api/reports', {
         method: 'POST',
@@ -59,11 +91,18 @@ export function UploadPage() {
           confidence: data.confidence,
           severity: data.severity,
           location: location || 'Unknown Location',
+          latitude,
+          longitude,
         })
       });
 
-      // Navigate to ResultPage with real ML results
-      navigate('/result', { state: { mlResult: data, filePreview: URL.createObjectURL(file) } });
+      // Navigate to ResultPage with real ML results and coordinates for the map
+      navigate('/result', { 
+        state: { 
+          mlResult: { ...data, latitude, longitude }, 
+          filePreview: base64Image // Persistent Base64 instead of transient blob
+        } 
+      });
 
     } catch (err) {
       setError(err.message);
@@ -116,11 +155,11 @@ export function UploadPage() {
                     <X size={20} />
                   </button>
                 </div>
-                {/* Simulated preview image placeholder */}
-                <div className="flex flex-col items-center text-slate-400">
-                  <ImageIcon size={48} className="mb-2 opacity-50" />
-                  <span className="font-medium">{file.name}</span>
-                </div>
+                <img 
+                  src={URL.createObjectURL(file)} 
+                  alt="Preview" 
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
           </div>

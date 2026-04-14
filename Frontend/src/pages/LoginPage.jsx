@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, CheckCircle2, User } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!identifier || !password) return;
 
     setLoading(true);
     setErrorMsg('');
@@ -24,22 +23,20 @@ export function LoginPage() {
       const response = await fetch('http://localhost:5005/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: identifier, password })
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
+      if (!response.ok) throw new Error(data.error || 'Login failed');
 
-      // Login successful, save real API token and User Profile
+      // Login successful, save real API token and User Profile (including Role)
       localStorage.setItem('auth_token', data.token);
       localStorage.setItem('auth_user_name', data.user_profile.username);
       localStorage.setItem('auth_user_email', data.user_profile.email);
+      localStorage.setItem('auth_user_role', data.user_profile.role || 'public');
       
       navigate('/dashboard');
-
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
@@ -56,25 +53,24 @@ export function LoginPage() {
            <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center mx-auto mb-4 text-primary">
                <CheckCircle2 size={32} />
            </div>
-           <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Welcome Back</h1>
-           <p className="text-slate-500 mt-2 font-medium">Sign in to your account</p>
+           <h1 className="text-3xl font-bold text-slate-800 tracking-tight tracking-tight uppercase">Admin / Corp Login</h1>
+           <p className="text-slate-500 mt-2 font-medium">Use your official credentials to proceed</p>
         </div>
 
         <Card className="p-8 backdrop-blur-xl bg-white/90">
           <form onSubmit={handleLogin} className="space-y-6">
-            
             {errorMsg && (
-               <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm font-medium rounded-lg text-center">
+               <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm font-medium rounded-lg text-center font-bold">
                   {errorMsg}
                </div>
             )}
 
             <Input 
-              type="email" 
-              placeholder="Email Address" 
-              icon={Mail} 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text" 
+              placeholder="Email or Username" 
+              icon={User} 
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
             />
             
@@ -87,22 +83,17 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <div className="flex justify-end">
-                <Link to="/forgot-password" className="text-sm text-primary hover:text-secondary font-medium transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
             </div>
 
-            <Button type="submit" className="w-full h-12 text-lg" disabled={loading}>
-              {loading ? 'Logging in...' : 'Log In'}
+            <Button type="submit" className="w-full h-12 text-lg font-bold" disabled={loading}>
+              {loading ? 'Authenticating...' : 'Sign In'}
             </Button>
           </form>
 
-          <div className="mt-8 text-center text-sm items-center font-medium text-slate-500">
-            Don't have an account?{' '}
-            <Link to="/signup" className="text-primary hover:text-secondary transition-colors font-semibold">
-              Sign up
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center text-sm font-medium text-slate-500">
+            Public User?{' '}
+            <Link to="/signup" className="text-primary hover:text-secondary transition-colors font-bold">
+              Register here
             </Link>
           </div>
         </Card>

@@ -21,3 +21,17 @@
     min-height: 100vh;
   }
 }
+
+/* Leaflet Map Fixes */
+.leaflet-container {
+  z-index: 10;
+  background-color: #f1f5f9;
+}
+
+.leaflet-tile-pane {
+  z-index: 20;
+}
+
+.leaflet-top, .leaflet-bottom {
+  z-index: 1000 !important;
+}
