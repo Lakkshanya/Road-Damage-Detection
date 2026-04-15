@@ -80,6 +80,9 @@ def get_dataset(subset):
                 file_paths.append(os.path.join(class_dir, fname))
                 labels.append(i)
                 
+    if len(file_paths) == 0:
+        raise ValueError(f"CRITICAL ERROR: No images found in {subset_dir}! You cannot train an AI model without data. Please ensure you have placed your `.jpg` images into the correct datasets folder and run `preprocess.py` first.")
+
     # Create dataset
     ds = tf.data.Dataset.from_tensor_slices((file_paths, labels))
     ds = ds.shuffle(len(file_paths)) if subset == 'train' else ds

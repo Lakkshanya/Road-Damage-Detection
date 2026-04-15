@@ -4,9 +4,10 @@ import random
 from tqdm import tqdm
 
 # Configuration
-SOURCE_DATA = 'ml_model/datasets/data'
-SOURCE_RDD = 'ml_model/datasets/RDD_Combined'
-DEST_DIR = 'ml_model/processed_data'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SOURCE_DATA = os.path.join(BASE_DIR, 'datasets', 'data')
+SOURCE_RDD = os.path.join(BASE_DIR, 'datasets', 'RDD_Combined')
+DEST_DIR = os.path.join(BASE_DIR, 'processed_data')
 TRAIN_RATIO = 0.8
 
 # Classes
@@ -19,7 +20,16 @@ for split in ['train', 'val']:
 
 def process_dataset(img_dir, lbl_dir, dataset_type):
     print(f"Processing {dataset_type}...")
-    images = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+    if not os.path.exists(img_dir):
+        print(f"  -> Skipping: Folder not found at {img_dir}. Please place your images here.")
+        os.makedirs(img_dir, exist_ok=True)
+        return
+        
+    if not os.path.exists(lbl_dir):
+        print(f"  -> Warning: Label folder not found at {lbl_dir}. Making directory.")
+        os.makedirs(lbl_dir, exist_ok=True)
+        
+    images = [f for f in os.listdir(img_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]
     processed_count = 0
     
     for img_name in tqdm(images):

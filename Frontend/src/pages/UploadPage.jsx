@@ -21,11 +21,93 @@ export function UploadPage() {
     e.preventDefault();
   };
 
-  const handleSubmit = (e) => {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const toBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (file) {
-      // Simulate submission & redirect to result page
-      navigate('/result');
+    if (!file) return;
+
+    setAnalyzing(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch('http://localhost:5000/predict', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze image');
+      }
+
+      // Convert image to Base64 for persistence and complaint submission
+      const base64Image = await toBase64(file);
+
+      // Save this report to the backend database
+      let latitude = null;
+      let longitude = null;
+      if (location) {
+        try {
+          let geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
+          let geoData = await geoRes.json();
+          
+          if (!geoData || geoData.length === 0) {
+            const fallbackLocation = location.includes('Chennai') ? location : `${location}, Chennai`;
+            geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackLocation)}&limit=1`);
+            geoData = await geoRes.json();
+          }
+
+          if (geoData && geoData.length > 0) {
+            latitude = parseFloat(geoData[0].lat);
+            longitude = parseFloat(geoData[0].lon);
+          }
+        } catch (geoErr) {
+          console.warn('Geocoding failed, saving without coordinates:', geoErr);
+        }
+      }
+
+      const token = localStorage.getItem('auth_token');
+      await fetch('http://localhost:5005/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          damage_type: data.damage,
+          confidence: data.confidence,
+          severity: data.severity,
+          location: location || 'Unknown Location',
+          latitude,
+          longitude,
+        })
+      });
+
+      // Navigate to ResultPage with real ML results and coordinates for the map
+      navigate('/result', { 
+        state: { 
+          mlResult: { ...data, latitude, longitude }, 
+          filePreview: base64Image // Persistent Base64 instead of transient blob
+        } 
+      });
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -73,11 +155,11 @@ export function UploadPage() {
                     <X size={20} />
                   </button>
                 </div>
-                {/* Simulated preview image placeholder */}
-                <div className="flex flex-col items-center text-slate-400">
-                  <ImageIcon size={48} className="mb-2 opacity-50" />
-                  <span className="font-medium">{file.name}</span>
-                </div>
+                <img 
+                  src={URL.createObjectURL(file)} 
+                  alt="Preview" 
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
           </div>
@@ -93,10 +175,16 @@ export function UploadPage() {
              />
           </div>
 
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4">
+              {error}
+            </div>
+          )}
+
           <div className="pt-4 border-t border-slate-100 flex justify-end gap-4">
             <Button type="button" variant="ghost" onClick={() => setFile(null)}>Cancel</Button>
-            <Button type="submit" disabled={!file} className="min-w-[150px]">
-              Analyze Image
+            <Button type="submit" disabled={!file || analyzing} className="min-w-[150px]">
+              {analyzing ? 'Analyzing...' : 'Analyze Image'}
             </Button>
           </div>
         </form>

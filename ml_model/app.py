@@ -10,8 +10,7 @@ import json
 import time
 
 app = Flask(__name__)
-
-import json
+CORS(app)
 
 # Path to the trained model
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,211 +21,196 @@ LABELS = {}
 
 def load_ml_resources():
     global model, LABELS
-    # 1. Load Model
     if os.path.exists(MODEL_PATH):
         try:
             model = tf.keras.models.load_model(MODEL_PATH)
             print(f"Successfully loaded model from {MODEL_PATH}")
         except Exception as e:
             print(f"Error loading model: {e}")
-    else:
-        print(f"Model file not found at {MODEL_PATH}")
-
-    # 2. Dynamic Label Mapping
+    
     if os.path.exists(LABEL_PATH):
         try:
             with open(LABEL_PATH, 'r') as f:
                 indices = json.load(f)
-                # Reverse the dict so we can look up by index
                 LABELS = {v: k for k, v in indices.items()}
-                print(f"Loaded label mapping: {LABELS}")
         except Exception as e:
             print(f"Error loading labels: {e}")
             LABELS = {0: 'Crack', 1: 'Manhole', 2: 'Normal', 3: 'Pothole'}
     else:
-        print(f"Label file not found at {LABEL_PATH}, using defaults.")
         LABELS = {0: 'Crack', 1: 'Manhole', 2: 'Normal', 3: 'Pothole'}
 
-# Load resources immediately on startup
 load_ml_resources()
 
 def preprocess_image(image):
     image = image.convert('RGB')
-    image = image.resize((224, 224)) # Optimized resolution for MobileNetV2
+    image = image.resize((224, 224))
     img_array = np.array(image).astype('float32')
-    # Use the official preprocess_input for MobileNetV2 consistency
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
 def calculate_severity(label, confidence):
-    """
-    Pseudo-logic for severity calculation.
-    In a real-world scenario, this would be based on the area of the damage.
-    """
-    if label == 'Normal':
-        return 'N/A'
-    
-    if confidence > 0.85:
-        return 'High'
-    elif confidence > 0.65:
-        return 'Medium'
-    else:
-        return 'Low'
+    if label == 'Normal' or label == 'No Damage': return 'None'
+    if confidence >= 0.75: return 'High'
+    if confidence >= 0.40: return 'Medium'
+    return 'Low'
 
 def detect_circles(image_bytes):
-    """
-    Uses traditional CV (Hough Circle Transform) to detect rigid circular shapes 
-    like manhole covers. Tuning: param2=70 (EXTRA high strictness).
-    """
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         height, width = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.medianBlur(gray, 5)
-        
-        # Hough Circle Detection (Increased param2 for higher strictness)
-        circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100,
-            param1=50, param2=70, minRadius=50, maxRadius=400
-        )
-        
+        circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=70, minRadius=50, maxRadius=400)
         valid_circles = 0
         if circles is not None:
             for circle in circles[0]:
-                center_x = circle[0]
-                center_y = circle[1]
-                # ZONING: Ignore circles in the top 40% (sky/mountain) AND left/right 25% (trees/foliage)
-                if center_y > (height * 0.4) and (width * 0.25 < center_x < width * 0.75):
+                if circle[1] > (height * 0.4) and (width * 0.25 < circle[0] < width * 0.75):
                     valid_circles += 1
-                    
-        # A real manhole will generate 1 to 3 concentric circles.
-        # If we detect 16 circles, the CV algorithm is picking up gravel/noisy pavement.
         return (0 < valid_circles <= 3), valid_circles
-    except Exception as e:
-        print(f"Circle detection error: {e}")
-        return False, 0
+    except: return False, 0
 
 def detect_lines(image_bytes):
-    """
-    Detects long linear patterns using Hough Line Transform.
-    Used to distinguish Cracks from Potholes.
-    """
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         height, width = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Edge detection
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-        
-        # Detect long lines (threshold=100, minLineLength=100)
-        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=100, maxLineGap=10)
-        
+        edges = cv2.Canny(gray, 50, 150)
+        lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100, minLineLength=100, maxLineGap=10)
         valid_lines = 0
         if lines is not None:
             for line in lines:
                 x1, y1, x2, y2 = line[0]
-                # ZONING: Ignore lines in the top 40% (sky/background) AND left/right 25% (trees/foliage)
-                if (y1 > height * 0.4 and y2 > height * 0.4) and \
-                   (width * 0.25 < x1 < width * 0.75) and \
-                   (width * 0.25 < x2 < width * 0.75):
-                    # Check length
-                    length = np.sqrt((x2-x1)**2 + (y2-y1)**2)
-                    if length > 120:
-                        valid_lines += 1
-                        
-        # A real crack should have a distinct, dominant line. 
-        # If there are dozens of lines, it's busy texture (like brick or aggregate).
+                if (y1 > height * 0.4 and y2 > height * 0.4) and (width * 0.25 < x1 < width * 0.75):
+                    if np.sqrt((x2-x1)**2 + (y2-y1)**2) > 120: valid_lines += 1
         return (0 < valid_lines <= 10), valid_lines
-    except Exception as e:
-        print(f"Line detection error: {e}")
-        return False, 0
+    except: return False, 0
+
+def get_detections(img_array):
+    # Use block_13_expand_relu for high-resolution semantic context
+    last_conv_layer_name = 'block_13_expand_relu' 
+    
+    try:
+        grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(last_conv_layer_name).output, model.output])
+    except:
+        last_conv_layer_name = 'Conv_1'
+        grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(last_conv_layer_name).output, model.output])
+
+    with tf.GradientTape() as tape:
+        conv_output, preds = grad_model(img_array)
+        top_idx = np.argmax(preds[0])
+        class_channel = preds[:, top_idx]
+
+    grads = tape.gradient(class_channel, conv_output)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    conv_output = conv_output[0]
+    heatmap = conv_output @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-10)
+    heatmap = heatmap.numpy()
+
+    # --- ADVANCED BLOB FUSION (PHYSICS-BASED FILTERING) ---
+    raw_img = ((img_array[0] + 1) * 127.5).astype(np.uint8)
+    gray = cv2.cvtColor(raw_img, cv2.COLOR_RGB2GRAY)
+    
+    darkness_map = (255 - gray).astype(float) / 255.0
+    darkness_map = cv2.resize(darkness_map, (heatmap.shape[1], heatmap.shape[0]))
+    
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    texture_map = np.abs(laplacian)
+    texture_map = cv2.GaussianBlur(texture_map, (15, 15), 0)
+    texture_map = cv2.resize(texture_map, (heatmap.shape[1], heatmap.shape[0]))
+    texture_weight = 1.0 - (texture_map / (np.max(texture_map) + 1e-10))
+    
+    h, w = heatmap.shape
+    road_mask = np.zeros((h, w))
+    for i in range(h):
+        for j in range(w):
+            road_mask[i, j] = np.exp(-(i/h - 0.75)**2 / 0.1) * np.exp(-(j/w - 0.5)**2 / 0.25)
+
+    heatmap = heatmap * (0.2 + 0.8 * darkness_map) * (0.5 + 0.5 * texture_weight) * (0.2 + 0.8 * road_mask)
+    heatmap = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + 1e-10)
+
+    heatmap = cv2.resize(heatmap, (224, 224))
+    heatmap = cv2.GaussianBlur(heatmap, (15, 15), 0)
+    heatmap = (heatmap * 255).astype("uint8")
+    
+    _, thresh = cv2.threshold(heatmap, 145, 255, cv2.THRESH_BINARY)
+    kernel = np.ones((7, 7), np.uint8)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    thresh = cv2.dilate(thresh, kernel, iterations=2)
+    
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    detections = []
+    for cnt in contours:
+        x, y, w, h_box = cv2.boundingRect(cnt)
+        if w < 25 or h_box < 25: continue
+        if y < 224 * 0.35: continue
+        detections.append({'x': (x/224)*100, 'y': (y/224)*100, 'w': (w/224)*100, 'h': (h_box/224)*100})
+    
+    detections.sort(key=lambda d: ((d['x']-50)**2 + (d['y']-75)**2))
+    return detections[:2]
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    start_time = time.time() # Start the timer
-    
-    if model is None:
-        return jsonify({'error': 'Model not loaded'}), 500
-    
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+    start_time = time.time()
+    if model is None: return jsonify({'error': 'Model not loaded'}), 500
+    if 'image' not in request.files: return jsonify({'error': 'No image provided'}), 400
     
     file = request.files['image']
     img_bytes = file.read()
     image = Image.open(io.BytesIO(img_bytes))
-    
-    # 1. AI PREDICTION
     processed_img = preprocess_image(image)
     predictions = model.predict(processed_img, verbose=0)[0]
     
-    # Get top results
-    top_indices = predictions.argsort()[-2:][::-1]
-    best_idx = top_indices[0]
-    second_idx = top_indices[1]
+    best_idx = np.argmax(predictions)
+    best_label, best_conf = LABELS[best_idx], float(predictions[best_idx])
     
-    best_label = LABELS[best_idx]
-    best_conf = float(predictions[best_idx])
+    has_circle, _ = detect_circles(img_bytes)
+    has_lines, _ = detect_lines(img_bytes)
     
-    second_label = LABELS[second_idx]
-    second_conf = float(predictions[second_idx])
+    final_label, final_conf = best_label, best_conf
+    if has_lines and best_label == 'Pothole': final_label = 'Crack'
+    if has_circle and best_conf < 0.90: final_label = 'Manhole'
     
-    # 2. GEOMETRIC VERIFICATION (Hybrid Logic 2.0)
-    has_geometric_circle, circle_count = detect_circles(img_bytes)
-    has_geometric_lines, line_count = detect_lines(img_bytes)
+    display_label =  'No Damage' if final_label == 'Normal' else final_label
+    severity = calculate_severity(display_label, final_conf)
     
-    final_label = best_label
-    final_conf = best_conf
-    logic_applied = "Standard AI"
-    
-    # --- HYBRID INTELLIGENCE 2.0 ---
-    
-    # RULE 1: Boost CRACK confidence if long linear features exist
-    if has_geometric_lines:
-        if best_label == 'Pothole' and 'Crack' in [best_label, second_label]:
-            # AI misidentified linear crack as pothole
-            final_label = 'Crack'
-            final_conf = max(best_conf, 0.82)
-            logic_applied = "Linear Refinement (Crack Detected via Lines)"
-        elif best_label == 'Crack':
-            final_conf = min(best_conf + 0.15, 0.99)
-            logic_applied = "Structural Confirmation (Crack Verified)"
+    detections = []
+    if display_label != 'No Damage':
+        detections = get_detections(processed_img)
 
-    # RULE 2: Correct Pothole/Crack to MANHOLE if rock-solid circles exist
-    if has_geometric_circle and best_conf < 0.90:
-        if best_label in ['Crack', 'Pothole']:
-            final_label = 'Manhole'
-            final_conf = max(best_conf, 0.85) 
-            logic_applied = "Geometric Override (Circular Manhole Pattern)"
-    
-    severity = calculate_severity(final_label, final_conf)
-    
-    # Log total time to terminal
-    total_time = (time.time() - start_time) * 1000
-    print(f"Total Inference Time: {total_time:.2f}ms")
-    
+    # TERMINAL TELEMETRY (Backend Performance Metrics)
+    total_ms = (time.time() - start_time) * 1000
+    print("\n" + "="*50)
+    print("🚦 ROAD DAMAGE ANALYSIS TELEMETRY")
+    print("="*50)
+    print(f"📦 Overall Decision: {display_label}")
+    print(f"📊 Final Confidence: {final_conf*100:.2f}%")
+    print(f"⚠️ Severity Level:   {severity}")
+    print(f"⏱️ Total Latency:    {total_ms:.2f}ms")
+    print("-"*50)
+    print("🧠 Individual AI Class Scores:")
+    for idx, conf in enumerate(predictions):
+        label = LABELS[idx]
+        is_winner = "⭐️" if label == final_label else "  "
+        print(f"  {is_winner} {label.ljust(10)}: {conf*100:6.2f}%")
+    print("-"*50)
+    print(f"⚙️ Geometric Checks: Circles={has_circle}, Lines={has_lines}")
+    print("="*50 + "\n")
+
     return jsonify({
-        'damage': final_label,
+        'damage': display_label,
         'confidence': f"{final_conf * 100:.2f}%",
         'severity': severity,
-        'debug_info': {
-            'method': logic_applied,
-            'circles': circle_count,
-            'lines': line_count,
-            'ai_top_1': f"{best_label} ({best_conf*100:.2f}%)",
-            'ai_top_2': f"{second_label} ({second_conf*100:.2f}%)"
-        }
+        'detections': detections
     })
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({
-        'status': 'online',
-        'model_loaded': model is not None
-    })
+    return jsonify({'status': 'online', 'model_loaded': model is not None})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

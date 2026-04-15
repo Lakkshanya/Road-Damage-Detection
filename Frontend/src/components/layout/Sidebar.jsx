@@ -18,14 +18,16 @@ export function Sidebar({ isOpen, setIsOpen }) {
     navigate('/login');
   };
 
+  const userRole = localStorage.getItem('auth_user_role') || 'public';
+
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Upload', path: '/upload', icon: UploadCloud },
+    { name: 'Upload', path: '/upload', icon: UploadCloud, hideFor: ['corporation'] },
     { name: 'Map View', path: '/map', icon: Map },
     { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Complaints', path: '/complaints', icon: MessageSquareWarning },
     { name: 'Profile', path: '/profile', icon: User },
-  ];
+  ].filter(item => !item.hideFor || !item.hideFor.includes(userRole));
 
   return (
     <>

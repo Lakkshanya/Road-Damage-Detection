@@ -1,72 +1,115 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Search, Filter, MapPin } from 'lucide-react';
+
+const API = 'http://localhost:5005';
+
+const SEVERITY_COLORS = {
+  High: '#EF4444',
+  Medium: '#F59E0B',
+  Low: '#3B82F6',
+  None: '#10B981',    // Green for No Damage
+};
+
+// Helper component to update map view when center changes
+function RecenterMap({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center);
+  }, [center, map]);
+  return null;
+}
 
 export function MapViewPage() {
-  const [activeType, setActiveType] = useState('Potholes');
-  const damageTypes = ['Potholes', 'Cracks', 'Surface'];
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    fetch(`${API}/api/reports`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        // Only keep reports with valid coordinates
+        const withCoords = (Array.isArray(data) ? data : []).filter(r => r.latitude && r.longitude);
+        setReports(withCoords);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Center map on India by default; if reports exist, center on the first one
+  const defaultCenter = reports.length > 0
+    ? [reports[0].latitude, reports[0].longitude]
+    : [13.0827, 80.2707]; // Chennai as default
+
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col pt-0 px-0 sm:-m-6 lg:-m-8">
-       {/* Full map layout taking all available space */}
-       <div className="relative flex-1 w-full bg-slate-200 overflow-hidden rounded-xl lg:rounded-none">
-          
-          {/* Map Image Placeholder */}
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+CjxwYXRoIGQ9Ik0wIDBoODB2ODBIMHoiIGZpbGw9IiNmM2Y0ZjYiLz48cGF0aCBkPSJNMCAyMGg4MHY0MEgweiIgZmlsbD0iI2U1NWM2OCIgb3BhY2l0eT0iMC4wNSIvPjxjaXJjbGUgY3g9IjQwIiBjeT0iNDAiIHI9IjIiIGZpbGw9IiNkNmQzZDEiLz4KPC9zdmc+')] opacity-70 bg-repeat bg-center" />
-          
-          {/* Mock Map Pins */}
-          <div className="absolute top-1/4 left-1/3 p-2.5 bg-red-500 text-white rounded-full shadow-lg hover:scale-110 cursor-pointer transition-transform animate-pulse">
-             <MapPin size={24} />
-          </div>
-          <div className="absolute top-1/2 left-1/2 p-2 bg-yellow-500 text-white rounded-full shadow-lg hover:scale-110 cursor-pointer transition-transform">
-             <MapPin size={20} />
-          </div>
-          <div className="absolute bottom-1/3 right-1/4 p-2.5 bg-red-500 text-white rounded-full shadow-lg hover:scale-110 cursor-pointer transition-transform">
-             <MapPin size={24} />
-          </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Live Damage Map</h1>
+        <p className="text-slate-500 font-medium mt-1">Pin-pointed locations of all reported road damages</p>
+      </div>
 
-          {/* Floating Filter Panel */}
-          <Card className="absolute top-4 left-4 sm:top-6 sm:left-6 z-10 w-80 p-5 shadow-2xl border-none bg-white/95 backdrop-blur-md">
-             <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 text-lg">
-                <Filter size={20} className="text-primary" /> Map Filters
-             </h3>
-             
-             <div className="space-y-6">
-                <div className="relative group">
-                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
-                   <input type="text" placeholder="Search location..." className="w-full pl-10 pr-4 py-2.5 bg-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all border border-transparent focus:border-primary/20" />
-                </div>
-                
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider">Severity</p>
-                  <div className="flex gap-2">
-                      <Badge variant="danger" className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-sm bg-red-100 text-red-700">High</Badge>
-                      <Badge variant="warning" className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-sm bg-yellow-100 text-yellow-700">Medium</Badge>
-                      <Badge variant="info" className="cursor-pointer hover:scale-105 transition-transform px-3 py-1 text-sm bg-blue-100 text-blue-700">Low</Badge>
-                  </div>
-                </div>
+      {/* Legend */}
+      <div className="flex items-center gap-6">
+        {Object.entries(SEVERITY_COLORS).map(([label, color]) => (
+          <div key={label} className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}60` }}></span>
+            <span className="text-sm font-medium text-slate-600">
+              {label === 'None' ? 'No Damage' : `${label} Severity`}
+            </span>
+          </div>
+        ))}
+      </div>
 
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider">Damage Type</p>
-                  <div className="flex flex-wrap gap-2">
-                      {damageTypes.map((type) => (
-                         <span 
-                            key={type}
-                            onClick={() => setActiveType(type)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-all duration-200 ${
-                               activeType === type 
-                               ? 'bg-primary text-white shadow-md scale-105' 
-                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                         >
-                            {type}
-                         </span>
-                      ))}
+      <Card className="overflow-hidden rounded-2xl" style={{ height: '70vh' }}>
+        {loading ? (
+          <div className="flex items-center justify-center h-full text-slate-400 font-medium">Loading map...</div>
+        ) : (
+          <MapContainer
+            center={defaultCenter}
+            zoom={reports.length > 0 ? 13 : 5}
+            style={{ height: '100%', width: '100%' }}
+            scrollWheelZoom={true}
+          >
+            <RecenterMap center={defaultCenter} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+
+            {reports.map((report) => (
+              <CircleMarker
+                key={report._id}
+                center={[report.latitude, report.longitude]}
+                radius={report.severity === 'High' ? 12 : report.severity === 'Medium' ? 9 : 7}
+                pathOptions={{
+                  color: SEVERITY_COLORS[report.severity] || '#94A3B8',
+                  fillColor: SEVERITY_COLORS[report.severity] || '#94A3B8',
+                  fillOpacity: 0.7,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div className="text-sm min-w-[180px]">
+                    <p className="font-bold text-slate-800 text-base mb-1">{report.damage_type}</p>
+                    <p className="text-slate-500 mb-1">📍 {report.location}</p>
+                    <p className="text-slate-500 mb-1">🎯 Confidence: <strong>{report.confidence}</strong></p>
+                    <p className="text-slate-500 mb-1">⚠️ Severity: <strong style={{ color: SEVERITY_COLORS[report.severity] }}>{report.severity}</strong></p>
+                    <p className="text-slate-400 text-xs mt-2">{new Date(report.createdAt).toLocaleString()}</p>
                   </div>
-                </div>
-             </div>
-          </Card>
-       </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        )}
+      </Card>
+
+      {reports.length === 0 && !loading && (
+        <div className="text-center py-4 text-slate-400 text-sm font-medium">
+          No geo-located reports yet. Upload an image with a location to see pins on the map!
+        </div>
+      )}
     </div>
   );
 }

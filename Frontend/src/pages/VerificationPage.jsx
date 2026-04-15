@@ -40,12 +40,46 @@ export function VerificationPage() {
     }
   };
 
-  const handleVerify = (e) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleVerify = async (e) => {
     e.preventDefault();
     const fullCode = code.join('');
-    if (fullCode.length === 6) {
-      // Logic for OTP verification success goes here
+    if (fullCode.length !== 6) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    // Retrieve email we saved during signup
+    const email = localStorage.getItem('auth_email');
+    
+    if (!email) {
+      setError("Email not found. Please sign up again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5005/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, otp: fullCode })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid Verification Code');
+      }
+      
+      // Success! Proceed to Login Page
       navigate('/login');
+      
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,6 +98,11 @@ export function VerificationPage() {
 
         <Card className="p-8 backdrop-blur-xl bg-white/90">
           <form onSubmit={handleVerify} className="space-y-8">
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4">
+                {error}
+              </div>
+            )}
             <div className="flex justify-between gap-2 sm:gap-3">
               {code.map((digit, idx) => (
                 <input
@@ -82,9 +121,9 @@ export function VerificationPage() {
             <Button 
                type="submit" 
                className="w-full h-12 text-lg disabled:opacity-50 disabled:cursor-not-allowed" 
-               disabled={code.join('').length !== 6}
+               disabled={code.join('').length !== 6 || loading}
             >
-              Verify Account <ArrowRight size={20} className="ml-2" />
+              {loading ? 'Verifying...' : <>Verify Account <ArrowRight size={20} className="ml-2" /></>}
             </Button>
           </form>
 
