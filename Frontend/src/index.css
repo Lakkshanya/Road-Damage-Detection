@@ -35,3 +35,21 @@
 .leaflet-top, .leaflet-bottom {
   z-index: 1000 !important;
 }
+
+/* Hide standard browser password visibility/clear buttons (Edge, IE, Chrome, Safari) */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-password-toggle-button {
+  display: none !important;
+}
+
+/* For newer Chromium based browsers */
+input[type="password"]::-webkit-reveal-button {
+  display: none !important;
+}
+
+input[type="password"]::-webkit-textfield-decoration-container {
+  visibility: visible !important;
+}

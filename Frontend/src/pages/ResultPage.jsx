@@ -18,7 +18,7 @@ export function ResultPage() {
   
   const [complaintData, setComplaintData] = useState({
     streetName: '',
-    complainantName: '',
+    complainantName: localStorage.getItem('auth_user_name') || '',
     details: ''
   });
 
@@ -105,12 +105,23 @@ export function ResultPage() {
         })
       });
 
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user_name');
+        localStorage.removeItem('auth_user_email');
+        localStorage.removeItem('auth_user_role');
+        alert('Session expired. Please login again.');
+        navigate('/login');
+        return;
+      }
+
       const data = await response.json();
 
       if (!response.ok) throw new Error(data.error || 'Failed to submit complaint');
       
-      alert('Complaint submitted successfully to Corporation!');
+      alert('Complaint submitted successfully to Corporation! Redirecting to tracking...');
       setShowComplaintForm(false);
+      navigate('/complaints');
     } catch (err) {
       alert(`Submission Error: ${err.message}`);
     } finally {
@@ -225,6 +236,16 @@ export function ResultPage() {
             <p className="text-slate-500 text-sm mb-6">Submit this damage to the Municipal Corporation for resolution.</p>
             
             <form onSubmit={handleCreateComplaint} className="space-y-5">
+              <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shrink-0">
+                  <img src={filePreview} alt="Damage" className="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase">Evidence Captured</p>
+                  <p className="text-sm font-bold text-slate-700">{mlResult.damage} - {mlResult.severity} Severity</p>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Complainant Name</label>
                 <input 

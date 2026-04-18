@@ -2,21 +2,35 @@ const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const emailConfig = require('../emailConfig');
 require('dotenv').config();
 
-// Create nodemailer transporter config (You will need to fill in real SMTP info in .env)
+const authUser = emailConfig.EMAIL_USER !== 'REPLACE_WITH_EMAIL' ? emailConfig.EMAIL_USER : process.env.EMAIL_USER;
+const authPass = emailConfig.EMAIL_PASS !== 'REPLACE_WITH_PASSWORD' ? emailConfig.EMAIL_PASS : process.env.EMAIL_PASS;
+
+// Create nodemailer transporter config
 const transporter = nodemailer.createTransport({
     service: 'gmail', 
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: authUser,
+        pass: authPass
     }
 });
 
 // Based on MediSentry's async email implementation, we fire and forget the email
-const sendAsyncEmail = (subject, to, htmlMessage) => {
+const sendAsyncEmail = (subject, to, htmlMessage, otp) => {
+    // FALLBACK: Log OTP to console so developers can verify without email working
+    console.log(`\n-----------------------------------------`);
+    console.log(`[DEVELOPER NOTICE] Verification Code for ${to}: ${otp}`);
+    console.log(`-----------------------------------------\n`);
+
+    if (!authUser || authUser === 'your-email@gmail.com' || authUser === 'REPLACE_WITH_EMAIL' || !authPass || authPass === 'REPLACE_WITH_PASSWORD') {
+        console.warn(`[EMAIL WARNING] SMTP credentials are not configured properly. Email to ${to} was skipped.`);
+        return;
+    }
+
     const mailOptions = {
-        from: `Road Damage AI <${process.env.EMAIL_USER}>`,
+        from: `Road Damage AI <${authUser}>`,
         to: to,
         subject: subject,
         html: htmlMessage
@@ -95,7 +109,7 @@ exports.register = async (req, res) => {
         </html>
         `;
 
-        sendAsyncEmail(subject, email, htmlMessage);
+        sendAsyncEmail(subject, email, htmlMessage, otp);
         res.status(201).json({ message: 'User registered. Please check email for verification code.' });
 
     } catch (error) {

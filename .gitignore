@@ -26,10 +26,7 @@ coverage.xml
 *.cover
 *.log
 
-# Data
-ml_model/datasets/
-ml_model/processed_data/
-ml_model/model.h5
+
 
 # IDEs
 .vscode/
@@ -41,3 +38,9 @@ ml_model/model.h5
 .DS_Store
 Thumbs.db
 .env
+Frontend/build_error.txt
+
+# ML Data
+ml_model/datasets/
+ml_model/processed_data/
+ml_model/model.h5

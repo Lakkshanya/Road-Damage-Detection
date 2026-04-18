@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Clock, CheckCircle, X, ShieldCheck, Eye, MessageSquare, Send, Plus, Upload } from 'lucide-react';
+import { Clock, CheckCircle, X, ShieldCheck, Eye, MessageSquare, Send, Plus, Upload, UploadCloud } from 'lucide-react';
 
 const API = 'http://localhost:5005';
 
@@ -22,7 +22,7 @@ export function ComplaintPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [newData, setNewData] = useState({
     streetName: '',
-    complainantName: '',
+    complainantName: localStorage.getItem('auth_user_name') || '',
     details: '',
     image: null,
     imagePreview: null
@@ -40,6 +40,14 @@ export function ComplaintPage() {
       }
       
       const res = await fetch(url, { headers });
+      
+      if (res.status === 401) {
+        localStorage.clear();
+        alert('Session expired. Please login again.');
+        window.location.href = '/login';
+        return;
+      }
+
       const data = await res.json();
       setComplaints(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -51,6 +59,7 @@ export function ComplaintPage() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toBase64 = (file) => new Promise((resolve, reject) => {
@@ -83,12 +92,19 @@ export function ComplaintPage() {
         })
       });
 
+      if (res.status === 401) {
+        localStorage.clear();
+        alert('Session expired. Please login again.');
+        window.location.href = '/login';
+        return;
+      }
+
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to submit complaint');
 
       alert('Complaint submitted successfully!');
       setShowCreateModal(false);
-      setNewData({ streetName: '', complainantName: '', details: '', image: null, imagePreview: null });
+      setNewData({ ...newData, streetName: '', details: '', image: null, imagePreview: null });
       fetchData();
     } catch (err) {
       alert(`Submission Error: ${err.message}`);

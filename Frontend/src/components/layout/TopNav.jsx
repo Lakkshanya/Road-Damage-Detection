@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Bell, Menu, Search, User, BellOff } from 'lucide-react';
 
 export function TopNav({ onMenuToggle }) {
